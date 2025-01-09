@@ -1,0 +1,35 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Participant {
+  id         String   @id @default(uuid())
+  questId    String
+  userId     String
+  created_at DateTime @default(now())
+  Quest      Quest    @relation(fields: [questId], references: [id])
+  wonQuests  Quest[] @relation(name: "Winner")
+}
+
+model Quest {
+  id            String        @id @default(uuid())
+  creatorId     String        
+  created_at    DateTime      @default(now())
+  question_slug String
+  time_limit    String        @default("30")
+  ended         Boolean       @default(false)
+  winner        Participant?  @relation(name: "Winner", fields: [winnerId], references: [id])
+  winnerId      String?
+  Participant   Participant[]
+}
