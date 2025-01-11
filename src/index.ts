@@ -13,7 +13,7 @@ const app: Application = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*", // Allow this origin
+    origin: "https://socratic-ejbs.vercel.app", // Allow this origin
     methods: ["GET", "POST"], // Allow specific HTTP methods
     credentials: true, // Allow credentials if needed
   },
