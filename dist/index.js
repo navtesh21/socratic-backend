@@ -18,6 +18,7 @@ const http_1 = __importDefault(require("http"));
 const socket_io_1 = require("socket.io");
 const cors_1 = __importDefault(require("cors"));
 const db_1 = __importDefault(require("./utils/db"));
+const helper_1 = __importDefault(require("./utils/helper"));
 //For env File
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -33,21 +34,53 @@ app.use((0, cors_1.default)());
 app.use(express_1.default.urlencoded({ extended: false }));
 app.use(express_1.default.json());
 const port = process.env.PORT || 8000;
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    if (!token) {
+        next(new Error("invalid token"));
+    }
+    socket.room = token;
+    next();
+});
 io.on("connection", (socket) => {
+    if (!socket.room) {
+        return;
+    }
+    socket.join(socket.room);
     console.log("a user connected", socket.id);
-    socket.emit("message", "hi");
-    socket.on("message", (text) => {
-        console.log(text);
+    socket.on("startTimer", (data) => {
+        console.log(data, "from timer");
+        let timeRemaining = parseInt(data) * 60;
+        const timer = setInterval(() => {
+            if (timeRemaining > 0) {
+                timeRemaining--;
+                io.to(socket.room).emit("timerUpdate", timeRemaining);
+            }
+            else {
+                clearInterval(timer);
+                io.to(socket.room).emit("timerComplete");
+            }
+        }, 1000);
     });
     socket.on("disconnect", () => {
         console.log("user disconnected");
     });
 });
+function getUsersInRoom(room) {
+    const roomDetails = io.sockets.adapter.rooms.get(room); // Get the room details
+    return roomDetails ? Array.from(roomDetails) : []; // Convert the Set to an array
+}
 app.get("/", (req, res) => {
     res.send("Welcome to Express & TypeScript Server");
 });
 app.post("/createQuest", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { creatorId, question_slug, time_limit } = req.body;
+    const check = yield (0, helper_1.default)(question_slug);
+    console.log(check);
+    if (!check) {
+        res.json({ status: 400, message: "Please paste a valid Url" });
+        return;
+    }
     try {
         const data = yield db_1.default.quest.create({
             data: {
@@ -81,6 +114,16 @@ app.post("/createQuest", (req, res) => __awaiter(void 0, void 0, void 0, functio
 app.post("/joinQuest", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { userId, questId } = req.body;
     try {
+        const response = yield db_1.default.participant.findMany({
+            where: {
+                questId
+            },
+        });
+        console.log(response.length, "finding participants");
+        if (response.length >= 2) {
+            res.json({ status: 400, message: "Already 2 paricipants Joined" });
+            return;
+        }
         const data = yield db_1.default.participant.create({
             data: {
                 userId,
@@ -108,6 +151,29 @@ app.post("/getQuests", (req, res) => __awaiter(void 0, void 0, void 0, function*
         const data = yield db_1.default.quest.findMany({
             where: {
                 creatorId: userId,
+            },
+        });
+        if (data) {
+            res.json({
+                status: 200,
+                data: data,
+            });
+        }
+        else {
+            res.json({ status: 400, message: "something went wrong" });
+        }
+    }
+    catch (error) {
+        console.log(error);
+        res.json({ status: 400, message: "something went wrong" });
+    }
+}));
+app.post("/getQuest", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { questId } = req.body;
+    try {
+        const data = yield db_1.default.quest.findUnique({
+            where: {
+                id: questId,
             },
         });
         if (data) {
