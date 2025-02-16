@@ -48,22 +48,60 @@ io.on("connection", (socket) => {
         return;
     }
     socket.join(socket.room);
+    const roomTimers = {};
     console.log("a user connected", socket.id);
     socket.on("startTimer", (data) => {
         console.log(data, "from timer");
+        // Clear existing timer for this room if it exists
+        if (roomTimers[socket.room]) {
+            clearInterval(roomTimers[socket.room]);
+        }
         let timeRemaining = parseInt(data) * 60;
-        const timer = setInterval(() => {
+        roomTimers[socket.room] = setInterval(() => __awaiter(void 0, void 0, void 0, function* () {
             if (timeRemaining > 0) {
                 timeRemaining--;
                 io.to(socket.room).emit("timerUpdate", timeRemaining);
             }
             else {
-                clearInterval(timer);
+                clearInterval(roomTimers[socket.room]);
+                delete roomTimers[socket.room];
                 io.to(socket.room).emit("timerComplete");
+                const res = yield db_1.default.quest.update({
+                    where: {
+                        id: socket.room
+                    },
+                    data: {
+                        ended: true
+                    }
+                });
+                console.log(res);
             }
-        }, 1000);
+        }), 1000);
     });
+    socket.on("passed", (userId) => __awaiter(void 0, void 0, void 0, function* () {
+        if (roomTimers[socket.room]) {
+            clearInterval(roomTimers[socket.room]);
+            delete roomTimers[socket.room];
+        }
+        console.log("User Passed", userId);
+        socket.broadcast.to(socket.room).emit('end', {
+            data: "You lost! Better luck next time",
+        });
+        const res = yield db_1.default.quest.update({
+            where: {
+                id: socket.room
+            },
+            data: {
+                ended: true
+            }
+        });
+        console.log(res);
+    }));
     socket.on("disconnect", () => {
+        if (roomTimers[socket.room]) {
+            clearInterval(roomTimers[socket.room]);
+            delete roomTimers[socket.room];
+        }
         console.log("user disconnected");
     });
 });
